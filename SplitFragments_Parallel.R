@@ -4,7 +4,7 @@
 #Apr 4, 2023. https://github.com/stuart-lab/signac/issues/28
 ###
 
-
+library('GenomicRanges')
 library('rtracklayer')
 library("knitr")
 library('future.apply')
@@ -16,27 +16,62 @@ library('slurmR')
 library('lme4')
 library('foreach')
 library('doParallel')
+library('optparse')
 
+option_list <- list(
+  make_option(c("-i", "--indir"), type="character", default = getwd(), help="Directory of seurat Object to read in"),
+  make_option(c("-o", "--outdir"), type="character", default = getwd(), help="Directory to Output Group Files"),
+  make_option(c("-t", "--tmpdir"), type="character", default = getwd(), help="Directory to store sub_fragments"),
+  make_option(c("-f", "--frgdir"), type="character", default = getwd(), help="Directory of Merged Fragment File"),
+  make_option(c("-a", "--assay"), type="character", default ="ATAC", help="Assay used for fragment files"),
+  make_option(c("-g","--genome"),type ="character", default = "hg38", help = "Reference Genome to align reads"),
+  make_option(c("-b","--groupBy"),type ="character", default = "hg38", help = "Metadata used to split fragments"),
+  make_option(c("-m","--minCells"),type ="integer", default = "5", help = "MinCells Group must have"),
+  make_option(c("-M","--maxCells"),type ="integer", default = "10000", help = "MaxCells Group must have"),
+  make_option(c("-c","--setCores"),type ="integer", default = "1", help = "Number of Cores used to run the program")
+)
 
-atac_seurat<- readRDS("/nfs/turbo/path-rjhryan-turbo/lab-members/Jan/Ryan_Lab_Chromatin/Level_3_ATAC/sc_ATAC_Lv3")
+args <- parse_args(OptionParser(option_list=option_list))
+
+if (args$indir == getwd()){
+  var = readline(prompt = paste("Is this OBJECT location correct? (Y/N)",args$indir));
+  if (var == N){
+    stop("Enter a different directory", call.=FALSE)
+  }
+}if(args$outdir == getwd()){
+  var = readline(prompt = paste("Is this OUTPUT location correct? (Y/N)",args$outdir));
+  if (var == N){
+    stop("Enter a different directory", call.=FALSE)
+  }
+}if(args$tmpdir == getwd()){
+  var = readline(prompt = paste("Is this TMP location correct? (Y/N)",args$tmpdir));
+  if (var == N){
+    stop("Enter a different directory", call.=FALSE)
+  }
+}if(args$frgdir == getwd()){
+  var = readline(prompt = paste("Is this FRAGMENT location correct? (Y/N)",args$frgdir));
+  if (var == N){
+    stop("Enter a different directory", call.=FALSE)
+  }
+}
 
 
 splitGroupFragments <- function(
     object = NULL,
-    assay = "ATAC",
-    genome = "hg38",
-    groupBy = "annotation_20230508", #Metadata used to split fragments
+    assay = args$indir,
+    genome = args$genome,
+    groupBy = args$groupBy, #Metadata used to split fragments
     downGroupBy = "all", #Only change if interested in specific clusters or timepoints. Otherwise use all
-    minCells = 5, 
-    maxCells = 10000,
+    minCells = args$minCells, 
+    maxCells =args$maxCells,
     nbFrags = 10000000,
     threads=1, #Keep at 1
-    setCores = 1, #Set this value to num of cpus used (-1 if on local machine)
+    setCores = args$setCores, #Set this value to num of cpus used (-1 if on local machine)
     test=FALSE, #Tests code on a chunk of a fragment file 
     test.nbFrags=NULL,
     outdir = NULL, #Directory to output final fragments
-    tmpdir = NULL, #Directory to store sub-fragment files
-    frgdir = NULL, #Directory of the Merged fragment file
+    tmpdir = NULL, #Directory to store sub-fragment files (Will be deleted once fragments parsed)
+    frgdir = args$frgdir, #Directory of the Merged fragment file
 ){
   
   dir.create(file.path(outdir), showWarnings = FALSE)
@@ -48,7 +83,6 @@ splitGroupFragments <- function(
   #Get fragments file path
   if (length(Fragments(object)) > 1){
     print("The object contains a list of fragments files")
-    #frag_file <- unique(unlist(lapply(Fragments(object), function(x){GetFragmentData(x)})))
     frag_file <- frgdir
     if (length(frag_file) > 1){
       #Could also try to run on each specific fragments files without splitting
@@ -99,7 +133,6 @@ splitGroupFragments <- function(
   
   ##If there is 1B line in the fragment file
   ##We can split the fragments file by the number of available threads (minus 1 thread not to overload)
-  
   if (threads == 1){
     avai_threads <- 1
   }else{
@@ -157,5 +190,5 @@ splitGroupFragments <- function(
   }
 }
 
-
-splitGroupFragments(atac_seurat, assay = 'ATAC', genome = 'hg38', threads = 1  , outdir = "/nfs/turbo/path-rjhryan-turbo/lab-members/Jan/Ryan_Lab_Chromatin/Re-Fragments_Annot_20230508", tmpdir = "/nfs/turbo/path-rjhryan-turbo/lab-members/Jan/Ryan_Lab_Chromatin/Re-Fragments_Annot_20230508")
+atac_seurat <- readRDS(args$indir)
+splitGroupFragments(atac_seurat)
